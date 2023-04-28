@@ -30,3 +30,12 @@
 *.exe
 *.out
 *.app
+
+# Logfiles
+error.log
+
+# Output files of execution
+GFs/*
+Simulation/*
+GF*.dat
+test*.dat
