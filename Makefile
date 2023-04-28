@@ -4,12 +4,16 @@ default_target: all
 COMPILER := g++
 CPPFLAGS := -O2 -std=c++11
 #WFLAGS   := -Wno-unused-command-line-argument -Wno-shift-count-overflow -Wno-unused-result
-OBJECTS  := io.o sim.o
+OBJECTS  := io.o elast.o sim.o
 opts     :=
 
 io.o: header.h io.cpp
 	@echo " compiling io.o ..."
 	@$(COMPILER) $(CPPFLAGS) -c io.cpp -o io.o > error.log 2>&1
+
+elast.o: header.h elast.cpp
+	@echo " compiling elast.o ..."
+	@$(COMPILER) $(CPPFLAGS) -c elast.cpp -o elast.o > error.log 2>&1
 
 sim.o: header.h sim.cpp
 	@echo " compiling sim.o ..."

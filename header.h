@@ -11,33 +11,24 @@
 using namespace std;
 
 namespace io {
-  template <typename T>
-  vector<T> read_column(const string& filename, uint32_t col) {
-    /* return data of the given column in a numeric text file */
-
-    ifstream file(filename);
-    if (!file.is_open()) {
-      cerr << "could not open file " + filename << "\n";
-      exit(1);
-    }
-
-    vector<T> result(0);
-    double val = 0;
-    while (!file.eof()) {
-      // skip comment lines and previous columns
-      double skip_value; string skip_string;
-      if (file.peek() == '#') getline(file, skip_string);
-      for (uint32_t i=0; i<col; ++i) file >> skip_value;
-      
-      if (file >> val) result.push_back(val);
-      getline(file, skip_string);
-    }
-    
-    file.close();
-    return result;
-  };
-
+  template <typename T> vector<T> read_column(const string& filename, uint32_t col);
   double column_increment(const string&, uint32_t);
+  void write_vectors(const string& filename, vector< vector<double>* > arrays, const string& header);
 }
+
+/*namespace elast {
+  double Estar = 1.;
+  uint32_t nBin = 32;
+  vector<double> bin_center(nBin), bin_area(nBin); // length nBin
+  vector<double> stress(nBin), disp(nBin), disp_old(nBin); // length nBin
+  vector<double> bin_edge; // length nBin+1
+  vector<vector<double> > stiffness;
+
+  void init_uniform_pos(uint32_t N, double Rmax);
+  void init_stiffness ();
+  void set_stress(double val);
+  void internal_stress();
+  void propagate();
+}//*/
 
 #endif
