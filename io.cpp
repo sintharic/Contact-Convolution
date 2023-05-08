@@ -71,9 +71,9 @@ void io::write_vectors(const string& filename, vector< vector<double>* > list, c
   this assumes that all vectors in <list> have the same size.
   */
 
-  uint32_t nData = (*list[0]).size();
-  for (auto array : list) {
-    if ((*array).size() != nData) {
+  uint32_t nVec = list.size(), nData = (*list[0]).size();
+  for (uint32_t iVec = 1; iVec < nVec; ++iVec) {
+    if ((*list[iVec]).size() != nData) {
       cerr << "io::write_vectors() cannot write vectors of different sizes!\n";
       exit(1);
     }
@@ -87,8 +87,39 @@ void io::write_vectors(const string& filename, vector< vector<double>* > list, c
   else {
     for (int iData = 0; iData < nData; ++iData) {
       output << (*list[0])[iData];
-      for (int iArray = 1; iArray < list.size(); ++iArray) {
-        output << "\t" << (*list[iArray])[iData];
+      for (int iVec = 1; iVec < list.size(); ++iVec) {
+        output << "\t" << (*list[iVec])[iData];
+      }
+      output << "\n";
+    }
+  }
+  output.close();
+};
+
+void io::write_array(const string& filename, vector< vector<double> >& array, const string& header) {
+  /*
+  writes numeric data to text file, where each vector in <array> represents a column.
+  this assumes that all vectors in <array> have the same size.
+  */
+
+  uint32_t nVec = array.size(), nData = array[0].size();
+  for (uint32_t iVec = 1; iVec < nVec; ++iVec) {
+    if (array[iVec].size() != nData) {
+      cerr << "io::write_array() cannot write vectors of different sizes!\n";
+      exit(1);
+    }
+  }
+
+  ofstream output(filename);
+  output << "# "+header << "\n";
+  if (array.size() == 1) {
+    for (double val : array[0]) output << val << "\n";
+  }
+  else {
+    for (int iData = 0; iData < nData; ++iData) {
+      output << array[0][iData];
+      for (int iVec = 1; iVec < array.size(); ++iVec) {
+        output << "\t" << array[iVec][iData];
       }
       output << "\n";
     }

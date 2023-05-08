@@ -14,6 +14,7 @@ namespace io {
   template <typename T> vector<T> read_column(const string& filename, uint32_t col);
   double column_increment(const string&, uint32_t);
   void write_vectors(const string& filename, vector< vector<double>* > arrays, const string& header);
+  void write_array(const string& filename, vector< vector<double> >& array, const string& header);
 }
 
 /*namespace elast {
