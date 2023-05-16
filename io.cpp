@@ -112,17 +112,19 @@ void io::write_array(const string& filename, vector< vector<double> >& array, co
 
   ofstream output(filename);
   output << "# "+header << "\n";
-  if (array.size() == 1) {
-    for (double val : array[0]) output << val << "\n";
-  }
-  else {
-    for (int iData = 0; iData < nData; ++iData) {
-      output << array[0][iData];
-      for (int iVec = 1; iVec < array.size(); ++iVec) {
-        output << "\t" << array[iVec][iData];
-      }
-      output << "\n";
+  for (int iVec = 0; iVec < nVec; ++iVec) {
+    output << array[iVec][0];
+    for (int iData = 1; iData < nData; ++iData) {
+      output << "\t" << array[iVec][iData];
     }
-  }
+    output << "\n";
+  }//*/
+  /*for (int iData = 0; iData < nData; ++iData) {
+    output << array[0][iData];
+    for (int iVec = 1; iVec < array.size(); ++iVec) {
+      output << "\t" << array[iVec][iData];
+    }
+    output << "\n";
+  }//*/
   output.close();
 };
