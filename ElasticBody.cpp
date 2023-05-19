@@ -12,7 +12,7 @@ double ellipe(double m) {
   See also: https://math.stackexchange.com/questions/2461844/incomplete-elliptic-integral-of-the-second-kind-with-negative-parameter
 */
 
-  using namespace boost::math;
+  using boost::math::ellint_1, boost::math::ellint_2, boost::math::jacobi_sn, boost::math::jacobi_cd;
   if (m>=0) return ellint_2(sqrt(m));
 
   double M = -m;
@@ -339,7 +339,6 @@ void ElasticBody::test_ellip_int() {
   can directly be compared against scipy.special's ellipe(m).
   */
 
-  using namespace boost::math;
   double x = -1.99, dx = 0.01;
   ofstream output("elliptic2.dat");
   output << "# k^2\tE(k^2)\n";
