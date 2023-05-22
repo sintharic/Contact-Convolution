@@ -18,6 +18,10 @@ Interaction::Interaction(ElasticBody& elast, Indenter& ind, potparams p) : param
   init(elast, ind);
 }
 
+Interaction::Interaction(ElasticBody& elast, Indenter& ind, map<string,string> p) : params(p) {
+  init(elast, ind);
+}
+
 
 void Interaction::add_stress(vector<double>& stress) {
   //cerr << "add_stress()\n";//FLOW

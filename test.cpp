@@ -15,38 +15,25 @@ extern const geometry HERTZ;
 
 void test_indenter() {
   cerr << "# test_indenter()\n";//FLOW
-  ElasticBody elast(100, 1, UNIFORM);
-  Indenter hertz(elast.bin_center, HERTZ);
-  io::write_vectors("indenter.dat", {&hertz.bin_center, &hertz.height}, "# r\tz(r)");
+  auto bin_edges = bins(100, 1, UNIFORM);
+  auto bin_centers = arithmetic_centers(bin_edges);
+  Indenter hertz(bin_edges, bin_centers, HERTZ);
+  io::write_vectors("indenter.dat", {&bin_centers, &hertz.height}, "# r\tz(r)");
 }
 
 
 void test_Verlet() {
-  cerr << "# test_Verlet()\n";//FLOW
-  ElasticBody elast(1, 2, UNIFORM);
-  elast.stiffness_array[0][0] = 1.;
-  elast.disp[0] = 1.; // u(t=0) relaxation
-  elast.disp_old[0] = 0.999;
-
-  ofstream output("verlet.dat");
-  output << "# time\tdisplacement\n";
-  elast.set_damping(0.0);
-  double dTime = 0.1;
-  uint32_t nTime = 1000;
-  for (int iTime = 0; iTime < nTime; ++iTime) {
-    elast.set_stress(0);
-    elast.internal_stress();
-    elast.propagate(dTime);
-    output << iTime*dTime << "\t" << elast.disp[0] << "\n";
-  }
-  output.close();
+  ElasticBody elast;
+  elast.test_Verlet();
 }
 
 void test_stress() {
   cerr << "# test_stress()\n";//FLOW
-  ElasticBody elast(200, 8., UNIFORM);
-  //elast.read_stiffness("stiff.dat");
-  uint32_t nBin = elast.bin_center.size();
+  auto bin_edges = bins(200, 8., UNIFORM);
+  auto bin_centers = arithmetic_centers(bin_edges);
+  map<string,string> dummy;
+  ElasticBody elast(bin_edges, bin_centers, dummy);
+  uint32_t nBin = bin_centers.size();
   vector<double> solution(nBin);
 
   // flat punch: calculate stress from displacement profile
@@ -92,11 +79,15 @@ void test_stress() {
 
 void test_disp_propagation() {
   cerr << "# test_disp_propagation()\n";//FLOW
-  ElasticBody elast(200, 8., UNIFORM);
+  auto bin_edges = bins(200, 8., UNIFORM);
+  auto bin_centers = arithmetic_centers(bin_edges);
+  map<string,string> dummy;
+  ElasticBody elast(bin_edges, bin_centers, dummy);
+  //ElasticBody elast(200, 8., UNIFORM);
   io::write_array("stiff_disp.dat", elast.stiffness_array, "v sBin v || < uBin >");
   //read_stiffness("stiff.dat");
   //io::write_array("stiff_read.dat", stiffness_array, "v sBin v || < uBin >");//DEBUG
-  Indenter hertz(elast.bin_center, HERTZ);
+  Indenter hertz(elast.bin_edge, elast.bin_center, HERTZ);
   uint32_t nBin = elast.bin_center.size();
   vector<double> solution(nBin);
 
@@ -139,7 +130,9 @@ void test_reader() {
 
   map<string,string> global=maps[0], elast=maps[1], indenter=maps[2], inter=maps[3];
 
-  ElasticBody body(maps[0], maps[1]);
+  auto bin_edges = bins(200, 8., UNIFORM);
+  auto bin_centers = arithmetic_centers(bin_edges);
+  ElasticBody body(bin_edges, bin_centers, elast);
 }
 
 int main() {

@@ -14,7 +14,9 @@ class Interaction {
   double (*function)(double, potparams);
 
 public:
+  Interaction() {};
   Interaction(ElasticBody& elast, Indenter& ind, potparams);
+  Interaction(ElasticBody& elast, Indenter& ind, map<string,string>);
   void init(ElasticBody& elast, Indenter& ind);
   void add_stress(vector<double>& stress);
   double potential(double gap) {return function(gap, params);};

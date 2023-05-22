@@ -11,9 +11,10 @@ class Indenter {
 public:
   vector<double> bin_center, height;
 
-  Indenter(vector<double>& rval, geometry g);
-  void init(vector<double>& rval, geometry g);
-  void update_bins(vector<double>& rval);
+  Indenter() {};
+  Indenter(vector<double>&, vector<double>&, geometry);
+  void init(vector<double>&, vector<double>&);
+  void update_bins(vector<double>&, vector<double>&);
   double pos(double r);
 
   static double polynomial(double r, geometry geom) {

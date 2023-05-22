@@ -25,36 +25,22 @@ double ellipe(double m) {
 }
 
 
+
 double s_ana(double x) {
   if (abs(x-1) < 1.e-10) return 0;
   return ellipe(-4*x/pow(x-1, 2))/(M_PI*pow(x+1, 2)*abs(x-1));
 };
 
 
-void ElasticBody::init(uint32_t N, double Rmax, uint8_t kind) {
-  if (kind==UNIFORM) init_uniform_bins(N, Rmax);
-  else {
-    cerr << "non-uniform grids not implemented yet.\n";
-    exit(1);
-  }
-  init_stiffness();
+
+ElasticBody::ElasticBody(vector<double>& edges, vector<double>& centers, map<string,string> elastic) {
+  init(edges, centers, elastic);
 }
 
-ElasticBody::ElasticBody(uint32_t N, double Rmax, uint8_t kind) {
-  init(N, Rmax, kind);
-}
 
-ElasticBody::ElasticBody(map<string,string> global, map<string,string> elastic) {
-  uint32_t nBin;
-  double Rmax;
-  uint8_t grid;
-  for (const auto& [key, value] : global) {
-    cout << key << " " << value << endl;//DEBUG
-    if (key == "Rmax") Rmax = stod(value);
-    else if (key == "nBin") nBin = stoi(value);
-    else if (key == "grid") grid = stoi(value);
-    else std::cout << "# unknown global parameter: " << key << std::endl;//DEBUG
-  }
+
+void ElasticBody::init(vector<double>& edges, vector<double>& centers, map<string,string> elastic) {
+  initialized = 0;
 
   for (const auto& [key, value] : elastic) {
     cout << key << " " << value << endl;//DEBUG
@@ -72,39 +58,32 @@ ElasticBody::ElasticBody(map<string,string> global, map<string,string> elastic) 
     else std::cout << "# unknown elastic parameter: " << key << std::endl;//DEBUG
   }
 
-  if (nMaxwell) {
-    dispMw.resize(nMaxwell);
-    for (vector<double> v : dispMw) v.resize(nBin);
-  }
-  else Estar_inf = Estar;
-
-  init(nBin, Rmax, grid);
-  if (nMaxwell) init_Maxwell(stod(global["dTime"]));//TODO: improve
-
-}
-
-void ElasticBody::init_uniform_bins(uint32_t N, double Rmax) {
-/* 
-  discretizes radial coordinate into <N> equidistant points from 0 to <Rmax>. 
-*/
-
-  nBin = N;
+  nBin = centers.size();
   bin_edge.resize(nBin+1);
-  area = M_PI*Rmax*Rmax;
-
-  double dr = Rmax/nBin;
+  bin_center.resize(nBin);
+  area = M_PI*edges.back()*edges.back();
   for (int iEdge = 0; iEdge <= nBin; ++iEdge) 
-    bin_edge[iEdge] = iEdge*dr;
+    bin_edge[iEdge] = edges[iEdge];
+  for (int iBin = 0; iBin < nBin; ++iBin) 
+    bin_center[iBin] = 0.5*(bin_edge[iBin+1] + bin_edge[iBin]);
+  initialized += 1;  
   
   init_fields_from_bins();
-};
+  
+  if (nMaxwell > 0) init_Maxwell(stod(elastic["dTime"]));//TODO: improve
+  else Estar_inf = Estar;
+
+  init_stiffness();
+}
+
+
 
 void ElasticBody::init_fields_from_bins() {
 /* 
   sets up all other fields according to the generated bin edges
 */
+  uint32_t nBin = bin_edge.size() - 1;
 
-  bin_center.resize(nBin);
   bin_area.resize(nBin);
   ext_stress.resize(nBin);
   int_stress.resize(nBin);
@@ -114,12 +93,12 @@ void ElasticBody::init_fields_from_bins() {
 
   for (int iBin = 0; iBin < nBin; ++iBin) {
     stiffness_array[iBin].resize(nBin);
-    bin_center[iBin] = 0.5*(bin_edge[iBin+1] + bin_edge[iBin]);
     bin_area[iBin] = 2*M_PI*bin_center[iBin]*(bin_edge[iBin+1] - bin_edge[iBin]);
   }
 
-  initialized = 1;
+  initialized += 2;
 };
+
 
 
 void ElasticBody::init_stiffness() {
@@ -153,10 +132,21 @@ void ElasticBody::init_stiffness() {
   //cout << "max stiffness: " << max_stiff_loc << "\n";//DEBUG*/
   max_stiff = max_stiff_loc;
 
-  initialized = 2;
+  initialized += 4;
 };
 
+
+
 void ElasticBody::init_Maxwell(double dTime){
+  dispMw.resize(nMaxwell);
+  for (vector<vector<double> >& array : dispMw) {
+    array.resize(bin_center.size());
+    for (vector<double>& vec : array) {
+      vec.resize(bin_center.size());
+      for (double& val : vec) val = 0;
+    }
+  }
+
   string filename = "maxwell.in";
   ifstream input(filename);
   int nMaxwell_test;
@@ -223,27 +213,11 @@ void ElasticBody::init_Maxwell(double dTime){
   } 
   if (damping_test != damping) cerr << "CAUTION! You are using a different dampGlobal than suggested by maxwell.cpp!\n";
 
+  initialized += 8;
   //cerr << "Finished reading maxwell.in.\n";//DEBUG
 }
 
 
-void ElasticBody::read_stiffness(const string& filename) {
-  //cerr << "# ElasticBody::read_stiffness()\n";//FLOW
-  ifstream input(filename);
-  if (!input.is_open()) {
-    cerr << filename+" not found.\n";
-    exit(1);
-  }
-  cerr << "# reading "+filename+"\n";
-  string skip_string; double skip_value;
-  for (int sBin = 0; sBin < nBin; ++sBin) {
-    if (input.peek() == '#') getline(input, skip_string);
-    //input >> skip_value; // radius
-    for (int uBin = 0; uBin < nBin; ++uBin) input >> stiffness_array[sBin][uBin];
-    getline(input, skip_string);
-  }
-  input.close();
-};
 
 void ElasticBody::set_stress(double val) {
   for (int i = 0; i < disp.size(); ++i) {
@@ -256,7 +230,7 @@ void ElasticBody::set_disp(double val) {
   for (int i = 0; i < disp.size(); ++i) disp[i] = val;
 };
 
-void set_values(vector<double> source, vector<double> *target) {
+void ElasticBody::set_values(vector<double> source, vector<double> *target) {
   if (source.size() != (*target).size()) 
     terminate("interpolation not implemented yet in ElasticBody::set_values().");
   for (int i = 0; i < source.size(); ++i) {
@@ -270,6 +244,8 @@ void ElasticBody::set_disp_old(double val) {
 
 void ElasticBody::set_damping(double val) {damping = val;};
 
+
+
 void ElasticBody::internal_stress() {
   for (int sBin = 0; sBin < int_stress.size(); ++sBin) {
     int_stress[sBin] = 0;
@@ -278,19 +254,22 @@ void ElasticBody::internal_stress() {
     }
   }
 
+  // add Maxwell stress
   for (int iMw = 0; iMw < nMaxwell; ++iMw) {
-    terminate("Maxwell not properly implemented yet.");
-
-    // add Maxwell stress
-    for (uint32_t iBin = 0; iBin < nBin; ++iBin) {
+    for (uint32_t sBin = 0; sBin < bin_center.size(); ++sBin) {
       double stressMw = 0;
-      for (int iMw = 0; iMw < nMaxwell; ++iMw) {
-        stressMw += stiffFacMw[iMw]*stiffness_array[iBin][iBin]*dispMw[iMw][iBin];
+      for (uint32_t uBin = 0; uBin < bin_center.size(); ++uBin) {
+        for (int iMw = 0; iMw < nMaxwell; ++iMw) {
+          stressMw += stiffFacMw[iMw]*stiffness_array[sBin][sBin]*dispMw[iMw][sBin][uBin];
+        }
       }
-      int_stress[iBin] += stressMw;//TEMP isolate conventional GFMD element by commenting this out
+      //TEMP isolate conventional GFMD element by commenting this out
+      int_stress[sBin] += stressMw;
     }
   }
 };
+
+
 
 void ElasticBody::external_stress() {
   double pressure = force/area;
@@ -298,6 +277,8 @@ void ElasticBody::external_stress() {
     ext_stress[iBin] += 1.*pressure;
   }
 };
+
+
 
 void ElasticBody::propagate(double dTime) {
   //cout << "dTime=" << dTime << "\n";//DEBUG
@@ -318,15 +299,16 @@ void ElasticBody::propagate(double dTime) {
     disp[iBin] = disp_new;
   }
 
+  // update Maxwell elements via improved Euler's method (a.k.a. Heun's method)
   for (int iMw = 0; iMw < nMaxwell; ++iMw) {
-    terminate("Maxwell not properly implemented yet.");
-    // update Maxwell elements via improved Euler's method (a.k.a. Heun's method)
-    for (uint32_t iBin = 1; iBin < nBin; ++iBin) {
-      for (int iMw = 0; iMw < nMaxwell; ++iMw) {
-        double slopeNow = invTauMw[iMw]*(disp[iBin] - dispMw[iMw][iBin]);
-        double dispFnew = dispMw[iMw][iBin] + slopeNow*dTime;
-        double slopeNew = invTauMw[iMw]*(disp[iBin] - dispFnew);
-        dispMw[iMw][iBin] += 0.5*(slopeNow + slopeNew) * dTime;
+    for (uint32_t uBin = 1; uBin < bin_center.size(); ++uBin) {
+      for (uint32_t sBin = 1; sBin < bin_center.size(); ++sBin) {
+        for (int iMw = 0; iMw < nMaxwell; ++iMw) {
+          double slopeNow = invTauMw[iMw]*(disp[uBin] - dispMw[iMw][sBin][uBin]);
+          double dispFnew = dispMw[iMw][sBin][uBin] + slopeNow*dTime;
+          double slopeNew = invTauMw[iMw]*(disp[uBin] - dispFnew);
+          dispMw[iMw][sBin][uBin] += 0.5*(slopeNow + slopeNew) * dTime;
+        }
       }
     }
   }
@@ -351,12 +333,84 @@ void ElasticBody::test_ellip_int() {
   output.close();
 }
 
+void ElasticBody::test_Verlet() {
+  cerr << "# test_Verlet()\n";//FLOW
+  bin_edge = {0,2};
+  bin_center = {1};
+  nBin = 1;
+  init_fields_from_bins();
+  init_stiffness();
+  stiffness_array[0][0] = 1.;
+  set_disp(1.); // u(t=0) relaxation
+  set_disp_old(0.999);
+  set_damping(0.0);
+
+  ofstream output("verlet.dat");
+  output << "# time\tdisplacement\n";
+  double dTime = 0.1;
+  uint32_t nTime = 1000;
+  for (int iTime = 0; iTime < nTime; ++iTime) {
+    set_stress(0);
+    internal_stress();
+    propagate(dTime);
+    output << iTime*dTime << "\t" << disp[0] << "\n";
+  }
+  output.close();
+}
 
 
 
 
 // -------------------------------------------------------------------------- //
 
+
+
+void ElasticBody::init(uint32_t N, double Rmax, uint8_t kind) {
+  initialized = 0;
+  if (kind==UNIFORM) init_uniform_bins(N, Rmax);
+  else {
+    cerr << "non-uniform grids not implemented yet.\n";
+    exit(1);
+  }
+  initialized += 1;
+  init_stiffness();
+}
+
+ElasticBody::ElasticBody(uint32_t N, double Rmax, uint8_t kind) {
+  init(N, Rmax, kind);
+}
+
+ElasticBody::ElasticBody(map<string,string> global, map<string,string> elastic) {
+  uint32_t nBin;
+  double Rmax;
+  uint8_t grid;
+  for (const auto& [key, value] : global) {
+    cout << key << " " << value << endl;//DEBUG
+    if (key == "Rmax") Rmax = stod(value);
+    else if (key == "nBin") nBin = stoi(value);
+    else if (key == "grid") grid = stoi(value);
+    else std::cout << "# unknown global parameter: " << key << std::endl;//DEBUG
+  }
+
+  init(nBin, Rmax, grid);
+  init(bin_edge, bin_center, elastic);
+}
+
+void ElasticBody::init_uniform_bins(uint32_t N, double Rmax) {
+/* 
+  discretizes radial coordinate into <N> equidistant points from 0 to <Rmax>. 
+*/
+
+  nBin = N;
+  bin_edge.resize(nBin+1);
+  area = M_PI*Rmax*Rmax;
+
+  double dr = Rmax/nBin;
+  for (int iEdge = 0; iEdge <= nBin; ++iEdge) 
+    bin_edge[iEdge] = iEdge*dr;
+  
+  init_fields_from_bins();
+};
 
 
 double s_fit(double x) {
@@ -435,4 +489,22 @@ void ElasticBody::fit_stiffness() {
     if (stiffness_array[sBin][sBin] > max_stiff) max_stiff = stiffness_array[sBin][sBin];
   }
   //cout << "max stiffness: " << max_stiff << "\n";//DEBUG*/
+};
+
+void ElasticBody::read_stiffness(const string& filename) {
+  //cerr << "# ElasticBody::read_stiffness()\n";//FLOW
+  ifstream input(filename);
+  if (!input.is_open()) {
+    cerr << filename+" not found.\n";
+    exit(1);
+  }
+  cerr << "# reading "+filename+"\n";
+  string skip_string; double skip_value;
+  for (int sBin = 0; sBin < nBin; ++sBin) {
+    if (input.peek() == '#') getline(input, skip_string);
+    //input >> skip_value; // radius
+    for (int uBin = 0; uBin < nBin; ++uBin) input >> stiffness_array[sBin][uBin];
+    getline(input, skip_string);
+  }
+  input.close();
 };

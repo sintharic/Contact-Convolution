@@ -8,10 +8,9 @@ double Indenter::pos(double z) {
   return function(z, geom);
 }
 
-void Indenter::init(vector<double>& rval, geometry g) {
-  geom = g;
-  bin_center.resize(rval.size());
-  height.resize(rval.size());
+void Indenter::init(vector<double>& edges, vector<double>& centers) {
+  bin_center.resize(centers.size());
+  height.resize(centers.size());
 
   if (geom.type == POLY) function = &(polynomial);
   else if (geom.type == FLAT) {
@@ -23,12 +22,12 @@ void Indenter::init(vector<double>& rval, geometry g) {
     exit(1);
   }
 
-  for (int ir = 0; ir < rval.size(); ++ir) {
-    bin_center[ir] = rval[ir];
-    height[ir] = function(rval[ir], geom);
+  for (int ir = 0; ir < centers.size(); ++ir) {
+    bin_center[ir] = centers[ir];
+    height[ir] = function(centers[ir], geom);
   }
 };
 
-Indenter::Indenter(vector<double>& rval, geometry g) {
-  init(rval, g);
+Indenter::Indenter(vector<double>& edges, vector<double>& centers, geometry g) : geom(g) {
+  init(edges, centers);
 }
