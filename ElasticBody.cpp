@@ -40,6 +40,8 @@ ElasticBody::ElasticBody(vector<double>& edges, vector<double>& centers, map<str
 
 
 void ElasticBody::init(vector<double>& edges, vector<double>& centers, map<string,string> elastic) {
+  cerr << "# ElasticBody::init()\n";//FLOW
+
   initialized = 0;
 
   for (const auto& [key, value] : elastic) {
@@ -70,7 +72,7 @@ void ElasticBody::init(vector<double>& edges, vector<double>& centers, map<strin
   
   init_fields_from_bins();
   
-  if (nMaxwell > 0) init_Maxwell(stod(elastic["dTime"]));//TODO: improve
+  if (nMaxwell > 0) init_Maxwell(stod(elastic["dTime"]));
   else Estar_inf = Estar;
 
   init_stiffness();
@@ -106,7 +108,7 @@ void ElasticBody::init_stiffness() {
   stiffness represents distribution of stress per surface displacement when 
   only a single circle of width <bin_width> at r=<bin_center> is displaced.
 */
-  //cerr << "# ElasticBody::init_stiffness()\n";//FLOW
+  cerr << "# ElasticBody::init_stiffness()\n";//FLOW
 
   double max_stiff_loc = -1e256;
   for (int uBin = 0; uBin < nBin; ++uBin) {
@@ -130,7 +132,7 @@ void ElasticBody::init_stiffness() {
     if (stiffness_array[sBin][sBin] > max_stiff_loc) max_stiff_loc = stiffness_array[sBin][sBin];
   }
   //cout << "max stiffness: " << max_stiff_loc << "\n";//DEBUG*/
-  max_stiff = max_stiff_loc;
+  max_stiff = (Estar/Estar_inf)*max_stiff_loc;
 
   initialized += 4;
 };
@@ -138,7 +140,10 @@ void ElasticBody::init_stiffness() {
 
 
 void ElasticBody::init_Maxwell(double dTime){
+  cerr << "# ElasticBody::init_Maxwell()\n";//FLOW
   dispMw.resize(nMaxwell);
+  invTauMw.resize(nMaxwell);
+  stiffFacMw.resize(nMaxwell);
   for (vector<vector<double> >& array : dispMw) {
     array.resize(bin_center.size());
     for (vector<double>& vec : array) {
@@ -246,7 +251,7 @@ void ElasticBody::set_damping(double val) {damping = val;};
 
 
 
-void ElasticBody::internal_stress() {
+void ElasticBody::stress_internal() {
   for (int sBin = 0; sBin < int_stress.size(); ++sBin) {
     int_stress[sBin] = 0;
     for (int uBin = 0; uBin < disp.size(); ++uBin) {
@@ -254,24 +259,31 @@ void ElasticBody::internal_stress() {
     }
   }
 
-  // add Maxwell stress
+  // add Maxwell stress (local and non-local viscoelasticity)
   for (int iMw = 0; iMw < nMaxwell; ++iMw) {
     for (uint32_t sBin = 0; sBin < bin_center.size(); ++sBin) {
       double stressMw = 0;
       for (uint32_t uBin = 0; uBin < bin_center.size(); ++uBin) {
         for (int iMw = 0; iMw < nMaxwell; ++iMw) {
-          stressMw += stiffFacMw[iMw]*stiffness_array[sBin][sBin]*dispMw[iMw][sBin][uBin];
+          //stressMw += stiffFacMw[iMw]*stiffness_array[sBin][sBin]*dispMw[iMw][sBin][uBin];
+          stressMw += stiffFacMw[iMw]*abs(stiffness_array[sBin][uBin])*dispMw[iMw][sBin][uBin];
         }
       }
       //TEMP isolate conventional GFMD element by commenting this out
       int_stress[sBin] += stressMw;
     }
   }
+  // add Maxwell stress (purely local viscoelasticity)
+  /*for (int iMw = 0; iMw < nMaxwell; ++iMw) {
+    for (uint32_t sBin = 0; sBin < bin_center.size(); ++sBin) {
+      int_stress[sBin] += stiffFacMw[iMw]*abs(stiffness_array[sBin][sBin])*dispMw[iMw][sBin][sBin];
+    }
+  }//*/
 };
 
 
 
-void ElasticBody::external_stress() {
+void ElasticBody::stress_external() {
   double pressure = force/area;
   for (int iBin = 0; iBin < nBin; ++iBin) {
     ext_stress[iBin] += 1.*pressure;
@@ -288,9 +300,9 @@ void ElasticBody::propagate(double dTime) {
 
   for (int iBin = 0; iBin < disp.size(); ++iBin) {
     // Langtangen Verlet (http://hplgit.github.io/fdm-book/doc/pub/vib/html/._vib003.html)
-    double inv_mass = stiffness_array[iBin][iBin]/massGFMD;
+    double inv_mass = max_stiff;//TEMP
+    //double inv_mass = stiffness_array[iBin][iBin]/massGFMD;
     double disp_new = 2*disp[iBin] + (damp_eff-1)*disp_old[iBin];
-    //disp_new += (int_stress[iBin]+ext_stress[iBin])*dt2*inv_mass;
     disp_new += (int_stress[iBin]+ext_stress[iBin])*bin_area[iBin]*dt2*inv_mass;
     disp_new /= 1 + damp_eff;
 
@@ -351,11 +363,41 @@ void ElasticBody::test_Verlet() {
   uint32_t nTime = 1000;
   for (int iTime = 0; iTime < nTime; ++iTime) {
     set_stress(0);
-    internal_stress();
+    stress_internal();
     propagate(dTime);
     output << iTime*dTime << "\t" << disp[0] << "\n";
   }
   output.close();
+}
+
+
+
+void ElasticBody::write_params(const string& filename) {
+  ofstream output(filename, std::ios::app);
+  if (!output.is_open()) return;
+
+  output << "ElasticBody:\n";
+  output << "  force = " << force << "\n";
+  output << "  Estar = " << Estar << "\n";
+  output << "  nMaxwell = " << nMaxwell << "\n";
+  if (nMaxwell) output << "  Estar_inf = " << Estar_inf << "\n";
+  output << "  damping = " << damping << "\n";
+  output << "  massGFMD = " << massGFMD << "\n";
+  output << "# max_stiff = " << get_stiff() << "\n";
+  output << "\n";
+
+  output.close();
+}
+
+
+void ElasticBody::write_config() {
+  io::write_vectors("config.dat", 
+      {&bin_center, &disp, &int_stress, &ext_stress}, "r\tdisp\tint_stress\text_stress");
+}
+
+void ElasticBody::write_config(uint32_t iTime) {
+  io::write_vectors("config."+to_string(iTime)+".dat", 
+      {&bin_center, &disp, &int_stress, &ext_stress}, "r\tdisp\tint_stress\text_stress");
 }
 
 
@@ -423,7 +465,7 @@ void ElasticBody::fit_stiffness() {
   only a single circle of width <bin_width> at r=<bin_center> is displaced.
   This is an old version of init_stiffness, where eqs were fitted to GFMD data.
 */
-  //cerr << "# ElasticBody::fit_stiffness()\n";//FLOW
+  cerr << "# ElasticBody::fit_stiffness()\n";//FLOW
   
   double max_stiff = -1e256;
   for (int uBin = 0; uBin < nBin; ++uBin) {
@@ -488,11 +530,12 @@ void ElasticBody::fit_stiffness() {
     //stiffness_array[sBin][sBin] = 1.00*stress_per_u - 0.00*stiffness_array[sBin][sBin];
     if (stiffness_array[sBin][sBin] > max_stiff) max_stiff = stiffness_array[sBin][sBin];
   }
+  max_stiff *= Estar/Estar_inf;
   //cout << "max stiffness: " << max_stiff << "\n";//DEBUG*/
 };
 
 void ElasticBody::read_stiffness(const string& filename) {
-  //cerr << "# ElasticBody::read_stiffness()\n";//FLOW
+  cerr << "# ElasticBody::read_stiffness()\n";//FLOW
   ifstream input(filename);
   if (!input.is_open()) {
     cerr << filename+" not found.\n";

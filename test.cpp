@@ -48,7 +48,7 @@ void test_stress() {
       solution[iBin] = 0.;
     }
   }
-  elast.internal_stress();
+  elast.stress_internal();
   for (double& s : elast.int_stress) s += elast.get_force()/(elast.get_area());
 
   io::write_vectors("stress_flat.dat", {&elast.bin_center, &elast.int_stress, &solution, &elast.disp}, 
@@ -67,7 +67,7 @@ void test_stress() {
       solution[iBin] = 0.;
     }
   }
-  elast.internal_stress();
+  elast.stress_internal();
   for (double& s : elast.int_stress) s += elast.get_force()/(elast.get_area());
 
   io::write_vectors("config.dat", 
@@ -107,7 +107,7 @@ void test_disp_propagation() {
   uint32_t nTime = 1000;
   double dTime = 0.05;
   for (int iTime = 0; iTime < nTime; ++iTime) {
-    elast.internal_stress();//only update internal stress, external stays the analytical one
+    elast.stress_internal();//only update internal stress, external stays the analytical one
     elast.propagate(dTime);
     if (iTime%10 != 0)  continue;
     io::write_vectors("config_"+to_string(iTime)+".dat", 

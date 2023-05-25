@@ -22,12 +22,34 @@ void Indenter::init(vector<double>& edges, vector<double>& centers) {
     exit(1);
   }
 
-  for (int ir = 0; ir < centers.size(); ++ir) {
-    bin_center[ir] = centers[ir];
-    height[ir] = function(centers[ir], geom);
+  for (int iBin = 0; iBin < centers.size(); ++iBin) {
+    bin_center[iBin] = centers[iBin];
+    height[iBin] = function(centers[iBin], geom);
   }
 };
 
 Indenter::Indenter(vector<double>& edges, vector<double>& centers, geometry g) : geom(g) {
   init(edges, centers);
+}
+
+void Indenter::write_params(const string& filename) {
+  ofstream output(filename, std::ios::app);
+  if (!output.is_open()) return;
+
+  output << "Indenter:\n";
+  output << "  type = " << GEOMETRY[geom.type] << "\n";
+  if (geom.type == POLY) output << "  exponent = " << geom.exponent << "\n";
+  output << "  radius = " << geom.radius << "\n";
+  output << "  z0 = " << geom.z0 << "\n";
+  output << "\n";
+
+  output.close();
+}
+
+void Indenter::write_config() {
+  io::write_vectors("indenter.dat", {&bin_center, &height}, "# r\tz(r)");
+}
+
+void Indenter::write_config(uint32_t iTime) {
+  io::write_vectors("indenter."+to_string(iTime)+".dat", {&bin_center, &height}, "# r\tz(r)");
 }

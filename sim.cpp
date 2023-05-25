@@ -14,24 +14,32 @@ class Simulation {
   Indenter indenter;
   Interaction interaction;
   
-  uint32_t nTime = 10, nBin = 100;
+  uint32_t nTime = 10, nBin = 100, frameInterval = 10;
   uint8_t grid = UNIFORM;
   double dTime = 0.05, Rmax = 8., area = M_PI*Rmax*Rmax;
 
 public:
   void init(const string&);
+  void write_params(const string&);
   void run(), update_bins();
 };
 
 void Simulation::init(const string& filename) {
-  auto maps = io::read_pairs("params.test");
+  cerr << "# Simulation::init()\n";//FLOW
+
+  auto maps = io::read_pairs(filename);
   map<string,string> p_global=maps[0], p_elast=maps[1], p_indenter=maps[2], p_inter=maps[3];
 
-  if (p_global.find("Rmax") != p_global.end()) Rmax = stod(p_global["Rmax"]);
-  if (p_global.find("dTime") != p_global.end()) dTime = stod(p_global["dTime"]);
-  if (p_global.find("nTime") != p_global.end()) nTime = stoi(p_global["nTime"]);
-  if (p_global.find("nBin") != p_global.end()) nBin = stoi(p_global["nBin"]);
-  if (p_global.find("grid") != p_global.end()) grid = stoi(p_global["grid"]);
+  for (const auto& [key, value] : p_global) {
+    cout << key << " " << value << endl;//DEBUG
+    if (key == "Rmax") Rmax = stod(value);
+    else if (key == "dTime") dTime = stod(value);
+    else if (key == "nTime") nTime = stoi(value);
+    else if (key == "nBin") nBin = stoi(value);
+    else if (key == "grid") grid = stoi(value);
+    else if (key == "frameInterval") frameInterval = stoi(value);
+    else cout << "# unknown elastic parameter: " << key << endl;//DEBUG
+  }
   area = M_PI*Rmax*Rmax;
 
   bin_edge = bins(nBin, Rmax, grid);
@@ -40,23 +48,45 @@ void Simulation::init(const string& filename) {
   elastic = ElasticBody(bin_edge, bin_center, p_elast);
   indenter = Indenter(bin_edge, bin_center, p_indenter);
   interaction = Interaction(elastic, indenter, p_inter);
+
+  write_params("params.out");
+}
+
+void Simulation::write_params(const string& filename) {
+  ofstream output(filename);
+  if (!output.is_open()) return;
+
+  output << "Global:\n";
+  output << "  nBin = " << nBin << "\n";
+  output << "  Rmax = " << Rmax << "\n";
+  output << "  grid = " << GRID[grid] << "\n";
+  output << "  nTime = " << nTime << "\n";
+  output << "  dTime = " << dTime << "\n";
+  output << "  frameInterval = " << frameInterval << "\n";
+  output << "\n";
+  output.close();
+
+  elastic.write_params(filename);
+  indenter.write_params(filename);
+  interaction.write_params(filename);
 }
 
 void Simulation::run() {
+  indenter.write_config();
   for (int iTime = 0; iTime < nTime; ++iTime) {
     elastic.set_stress(0);
-    elastic.internal_stress();
-    elastic.external_stress();
+    elastic.stress_internal();
+    elastic.stress_external();
     interaction.add_stress(elastic.ext_stress);
     elastic.propagate(dTime);
     if (grid == DYNAMIC) update_bins();
-    if (iTime%100) continue;
-    io::write_vectors("disp_"+to_string(iTime)+".dat", 
-      {&elastic.bin_center, &elastic.disp, &elastic.int_stress, &elastic.ext_stress}, "r\tdisp\tint_stress\text_stress");
+    if (iTime%frameInterval) continue;
+    elastic.write_config(iTime);
   }
 }
 
 void Simulation::update_bins() {
+  terminate("DYNAMIC bins not implemented yet.");
   /*uint32_t idx = interaction.idx_contact();
   bin_edge = dynamic_bins(nBin, idx, Rmax);
   bin_center = arithmetic_centers(bin_edge);
@@ -64,7 +94,24 @@ void Simulation::update_bins() {
   indenter.update_bins(bin_edge, bin_center);//*/
 }
 
+
 int main() {
+  Simulation sim;
+  sim.init("params.in");
+  sim.run();
+}
+
+
+
+
+
+// ---------------------------------
+
+
+
+
+
+int old_main() {
   double damping = 1.8;
   double dTime = 0.05;
 
@@ -82,8 +129,8 @@ int main() {
     double time = iTime*dTime;
     //elast.set_disp(1.);
     elast.set_stress(0);
-    elast.internal_stress();
-    elast.external_stress();
+    elast.stress_internal();
+    elast.stress_external();
     inter.add_stress(elast.ext_stress);
     elast.propagate(dTime);
     if (iTime%100) continue;

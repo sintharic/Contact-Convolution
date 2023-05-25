@@ -7,6 +7,8 @@ extern const geometry HERTZ;
 void Interaction::init(ElasticBody& elast, Indenter& ind) {
   pos_ind = &(ind.height);
   pos_elast = &(elast.disp);
+
+  if (params.potCurveRel > 0) params.curvature = params.potCurveRel*elast.get_stiff();
   
   if (params.surfEnerg == 0) function = potential1;
   else function = potential2;
@@ -31,3 +33,24 @@ void Interaction::add_stress(vector<double>& stress) {
     //ext_stress[iBin] += 1.*pressure;
   }
 };
+
+
+void Interaction::write_params(const string& filename) {
+  ofstream output(filename, std::ios::app);
+  if (!output.is_open()) return;
+
+  output << "Interaction:\n";
+  output << "  surfEnerg = " << params.surfEnerg << "\n";
+  if (params.potCurveRel > 0) {
+    output << "  potCurveRel = " << params.potCurveRel << "\n";
+    output << "# curvature = " << params.curvature << "\n";
+    output << "# range = " << params.range << "\n";
+  }
+  else {
+    output << "  curvature = " << params.curvature << "\n";
+    output << "  range = " << params.range << "\n";
+  }
+  output << "\n";
+
+  output.close();
+}

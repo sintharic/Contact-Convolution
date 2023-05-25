@@ -51,15 +51,21 @@ public:
   void set_disp_old(double val);
   void set_damping(double);
   void update_bins(vector<double>&, vector<double>&);
-  void internal_stress();
-  void external_stress();
+  void stress_internal();
+  void stress_external();
   void propagate(double);
 
+  void write_config();
+  void write_config(uint32_t);
+  void write_params(const string&);
+
+  // access
   double get_Estar() {return Estar;};
   double get_force() {return force;};
   double get_area() {return area;};
   double get_stiff() {return max_stiff;};
 
+  // tests
   void test_Verlet();
   void test_stress();
   void test_disp_propagation();

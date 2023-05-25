@@ -21,6 +21,8 @@ public:
   void add_stress(vector<double>& stress);
   double potential(double gap) {return function(gap, params);};
 
+  void write_params(const string&);
+
   static double potential1(double gap, potparams p) {
     if (gap > 0) return 0;
     return p.curvature*gap;

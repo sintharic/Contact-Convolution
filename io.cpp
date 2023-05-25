@@ -128,14 +128,6 @@ void io::write_array(const string& filename, vector< vector<double> >& array, co
 
 
 const char DELIMITER = '=', COMMENT = '#';
-map<string, string> SUBS = {
-  {"UNIFORM", to_string(UNIFORM)}, 
-  {"LOG", to_string(LOG)}, 
-  {"DYNAMIC", to_string(DYNAMIC)},
-  {"FLAT", to_string(FLAT)},
-  {"POLY", to_string(POLY)},
-  {"SPHERE", to_string(SPHERE)}
-};
 
 vector< map<string,string> > io::read_pairs(const string& filename) {
   // inspired by https://www.walletfox.com/course/parseconfigfile.php
@@ -143,7 +135,7 @@ vector< map<string,string> > io::read_pairs(const string& filename) {
   map<string, string> *active = &global;
   ifstream input(filename); 
   
-  if (!input.is_open()) terminate("io::read_params() couldn't open file.");
+  if (!input.is_open()) terminate("io::read_pairs() could not open "+filename+".");
   
   string line; 
   while (getline(input, line)) {
@@ -166,5 +158,9 @@ vector< map<string,string> > io::read_pairs(const string& filename) {
     (*active)[name] = value;
   }
   input.close();
+
+  // add dTime to elastic params for Maxwell parameter checking
+  if (global.find("dTime") != global.end()) elastic["dTime"] = global["dTime"];
+
   return {global, elastic, indenter, inter};
 }

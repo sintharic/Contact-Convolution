@@ -74,6 +74,7 @@ struct potparams {
   double curvature = 10.;
   double surfEnerg = 1e-4;
   double range = M_PI*sqrt(surfEnerg/(2*curvature));
+  double potCurveRel = -1;
 
   potparams() {};
   potparams(double c, double gamma) : curvature(c), surfEnerg(gamma) {
@@ -81,11 +82,12 @@ struct potparams {
   }
   potparams(map<string,string> params) {
     for (const auto& [key, value] : params) {
-      cout << key << " " << value << endl;//DEBUG
+      //cout << key << " " << value << endl;//DEBUG
       if (key == "curvature") curvature = stod(value);
       else if (key == "surfEnerg") surfEnerg = stod(value);
       else if (key == "range") range = stod(value);
-      else std::cout << "# unknown geometry parameter: " << key << std::endl;//DEBUG
+      else if (key == "potCurveRel") potCurveRel = stod(value);
+      else std::cout << "# unknown potential parameter: " << key << std::endl;//DEBUG
     }
   }
 };
@@ -100,5 +102,15 @@ namespace io {
 
 const geometry HERTZ;
 const potparams DEFAULT_POTENTIAL(10., 1e-4);
+static map<uint8_t, string> GEOMETRY = {{FLAT, "FLAT"}, {POLY, "POLY"}, {SPHERE, "SPHERE"}};
+static map<uint8_t, string> GRID = {{UNIFORM, "UNIFORM"}, {LOG, "LOG"}, {DYNAMIC, "DYNAMIC"}};
+static map<string, string> SUBS = {
+  {"UNIFORM", to_string(UNIFORM)}, 
+  {"LOG", to_string(LOG)}, 
+  {"DYNAMIC", to_string(DYNAMIC)},
+  {"FLAT", to_string(FLAT)},
+  {"POLY", to_string(POLY)},
+  {"SPHERE", to_string(SPHERE)}
+};
 
 #endif
