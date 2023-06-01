@@ -33,7 +33,13 @@ double s_ana(double x) {
 
 
 
-ElasticBody::ElasticBody(vector<double>& edges, vector<double>& centers, map<string,string> elastic) {
+ElasticBody::ElasticBody(vector<double>& edges, vector<double>& centers, 
+                         map<string,string> elastic) : ID(0) {
+  init(edges, centers, elastic);
+}
+
+ElasticBody::ElasticBody(vector<double>& edges, vector<double>& centers, 
+                         map<string,string> elastic, uint32_t i) : ID(i) {
   init(edges, centers, elastic);
 }
 
@@ -76,6 +82,8 @@ void ElasticBody::init(vector<double>& edges, vector<double>& centers, map<strin
   else Estar_inf = Estar;
 
   init_stiffness();
+  moni.open("moni"+to_string(ID)+".dat");
+  //moni = fopen("moni.dat", "w+");
 }
 
 
@@ -259,24 +267,24 @@ void ElasticBody::stress_internal() {
     }
   }
 
-  // add Maxwell stress (local and non-local viscoelasticity)
+  /*// add Maxwell stress (local and non-local viscoelasticity)
   for (int iMw = 0; iMw < nMaxwell; ++iMw) {
     for (uint32_t sBin = 0; sBin < bin_center.size(); ++sBin) {
       double stressMw = 0;
-      for (uint32_t uBin = 0; uBin < bin_center.size(); ++uBin) {
-        for (int iMw = 0; iMw < nMaxwell; ++iMw) {
-          //stressMw += stiffFacMw[iMw]*stiffness_array[sBin][sBin]*dispMw[iMw][sBin][uBin];
-          stressMw += stiffFacMw[iMw]*abs(stiffness_array[sBin][uBin])*dispMw[iMw][sBin][uBin];
+      for (int iMw = 0; iMw < nMaxwell; ++iMw) {
+        for (uint32_t uBin = 0; uBin < bin_center.size(); ++uBin) {
+          stressMw += stiffFacMw[iMw]*stiffness_array[sBin][uBin]*dispMw[iMw][sBin][uBin];
+          //stressMw += stiffFacMw[iMw]*abs(stiffness_array[sBin][uBin])*dispMw[iMw][sBin][uBin];
         }
       }
-      //TEMP isolate conventional GFMD element by commenting this out
       int_stress[sBin] += stressMw;
     }
-  }
+  }//*/
+
   // add Maxwell stress (purely local viscoelasticity)
-  /*for (int iMw = 0; iMw < nMaxwell; ++iMw) {
+  for (int iMw = 0; iMw < nMaxwell; ++iMw) {
     for (uint32_t sBin = 0; sBin < bin_center.size(); ++sBin) {
-      int_stress[sBin] += stiffFacMw[iMw]*abs(stiffness_array[sBin][sBin])*dispMw[iMw][sBin][sBin];
+      int_stress[sBin] += stiffFacMw[iMw]*stiffness_array[sBin][sBin]*dispMw[iMw][sBin][sBin];
     }
   }//*/
 };
@@ -298,32 +306,38 @@ void ElasticBody::propagate(double dTime) {
   double dt2 = dTime*dTime;
   double damp_eff = 0.5*damping*dTime;
 
+  double weighted_sum = 0;
   for (int iBin = 0; iBin < disp.size(); ++iBin) {
     // Langtangen Verlet (http://hplgit.github.io/fdm-book/doc/pub/vib/html/._vib003.html)
-    double inv_mass = max_stiff;//TEMP
-    //double inv_mass = stiffness_array[iBin][iBin]/massGFMD;
+    //double inv_mass = max_stiff;//TEMP
+    double inv_mass = stiffness_array[iBin][iBin]/massGFMD;
     double disp_new = 2*disp[iBin] + (damp_eff-1)*disp_old[iBin];
-    disp_new += (int_stress[iBin]+ext_stress[iBin])*bin_area[iBin]*dt2*inv_mass;
+    //disp_new += (int_stress[iBin]+ext_stress[iBin])*dt2*inv_mass;//stress
+    disp_new += (int_stress[iBin]+ext_stress[iBin])*bin_area[iBin]*dt2*inv_mass;//force
     disp_new /= 1 + damp_eff;
 
     // step forward
     disp_old[iBin] = disp[iBin];
     disp[iBin] = disp_new;
+    weighted_sum += disp_new*bin_area[iBin];
   }
+  dispCOM = weighted_sum/area;
 
   // update Maxwell elements via improved Euler's method (a.k.a. Heun's method)
   for (int iMw = 0; iMw < nMaxwell; ++iMw) {
     for (uint32_t uBin = 1; uBin < bin_center.size(); ++uBin) {
       for (uint32_t sBin = 1; sBin < bin_center.size(); ++sBin) {
-        for (int iMw = 0; iMw < nMaxwell; ++iMw) {
-          double slopeNow = invTauMw[iMw]*(disp[uBin] - dispMw[iMw][sBin][uBin]);
-          double dispFnew = dispMw[iMw][sBin][uBin] + slopeNow*dTime;
-          double slopeNew = invTauMw[iMw]*(disp[uBin] - dispFnew);
-          dispMw[iMw][sBin][uBin] += 0.5*(slopeNow + slopeNew) * dTime;
-        }
+        double slopeNow = invTauMw[iMw]*(disp[uBin]-dispCOM - dispMw[iMw][sBin][uBin]);
+        double dispFnew = dispMw[iMw][sBin][uBin] + slopeNow*dTime;
+        double slopeNew = invTauMw[iMw]*(disp[uBin]-dispCOM - dispFnew);
+        dispMw[iMw][sBin][uBin] += 0.5*(slopeNow + slopeNew) * dTime;
       }
     }
   }
+
+  moni << disp[0] << "\t" << disp.back() << "\n";
+  //fprintf(moni, "%f\t%f\n", disp[0], disp.back());
+  //printf("%f\t%f\n", disp[0], disp.back());
 };
 
 void ElasticBody::test_ellip_int() {
@@ -391,6 +405,7 @@ void ElasticBody::write_params(const string& filename) {
 
 
 void ElasticBody::write_config() {
+  io::write_array("stiffness.dat", stiffness_array, "v sBin v || < uBin >");
   io::write_vectors("config.dat", 
       {&bin_center, &disp, &int_stress, &ext_stress}, "r\tdisp\tint_stress\text_stress");
 }
@@ -418,11 +433,11 @@ void ElasticBody::init(uint32_t N, double Rmax, uint8_t kind) {
   init_stiffness();
 }
 
-ElasticBody::ElasticBody(uint32_t N, double Rmax, uint8_t kind) {
+ElasticBody::ElasticBody(uint32_t N, double Rmax, uint8_t kind) : ID(0) {
   init(N, Rmax, kind);
 }
 
-ElasticBody::ElasticBody(map<string,string> global, map<string,string> elastic) {
+ElasticBody::ElasticBody(map<string,string> global, map<string,string> elastic) : ID(0) {
   uint32_t nBin;
   double Rmax;
   uint8_t grid;

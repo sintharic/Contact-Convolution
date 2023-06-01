@@ -8,6 +8,7 @@ class ElasticBody {
   double Estar = 1., Estar_inf = 1.;
   double area = M_PI*4;
   uint32_t nBin = 32;
+  uint32_t ID;
 
   // Maxwell parameters
   uint32_t nMaxwell = 0;
@@ -26,7 +27,9 @@ class ElasticBody {
   void init_stiffness();
   void fit_stiffness();
   void read_stiffness(const string&);
-  double max_stiff = 0;
+  double max_stiff = 0, dispCOM = 0;
+
+  ofstream moni;
 
 public:
   uint8_t initialized = 0;
@@ -36,8 +39,10 @@ public:
   vector<vector<double> > stiffness_array;
 
   //new
-  ElasticBody() {};
+  ElasticBody() : ID(0) {};
   ElasticBody(vector<double>&, vector<double>&, map<string,string>);
+  ElasticBody(uint32_t i) : ID(i) {};
+  ElasticBody(vector<double>&, vector<double>&, map<string,string>, uint32_t);
   void init(vector<double>&, vector<double>&, map<string,string>);
   //old
   ElasticBody(uint32_t, double, uint8_t);

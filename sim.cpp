@@ -83,6 +83,7 @@ void Simulation::run() {
     if (iTime%frameInterval) continue;
     elastic.write_config(iTime);
   }
+  elastic.write_config();
 }
 
 void Simulation::update_bins() {
