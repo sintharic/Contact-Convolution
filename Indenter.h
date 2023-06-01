@@ -13,7 +13,9 @@ public:
 
   Indenter() {};
   Indenter(vector<double>&, vector<double>&, geometry);
+  Indenter(vector<double>&, vector<double>&, map<string,string>);
   void init(vector<double>&, vector<double>&);
+  void init(vector<double>&, vector<double>&, map<string,string>);
   void update_bins(vector<double>&, vector<double>&);
   double pos(double r);
 

@@ -24,30 +24,57 @@ public:
   void run(), update_bins();
 };
 
+// void Simulation::init(const string& filename) {
+//   cerr << "# Simulation::init()\n";//FLOW
+
+//   auto maps = io::read_pairs(filename);
+//   map<string,string> p_global=maps[0], p_elast=maps[1], p_indenter=maps[2], p_inter=maps[3];
+
+//   for (const auto& [key, value] : p_global) {
+//     cout << key << " " << value << endl;//DEBUG
+//     if (key == "Rmax") Rmax = stod(value);
+//     else if (key == "dTime") dTime = stod(value);
+//     else if (key == "nTime") nTime = stoi(value);
+//     else if (key == "nBin") nBin = stoi(value);
+//     else if (key == "grid") grid = stoi(value);
+//     else if (key == "frameInterval") frameInterval = stoi(value);
+//     else cout << "# unknown elastic parameter: " << key << endl;//DEBUG
+//   }
+//   area = M_PI*Rmax*Rmax;
+
+//   bin_edge = bins(nBin, Rmax, grid);
+//   bin_center = arithmetic_centers(bin_edge);
+
+//   elastic = ElasticBody(bin_edge, bin_center, p_elast);
+//   indenter = Indenter(bin_edge, bin_center, p_indenter);
+//   interaction = Interaction(elastic, indenter, p_inter);
+
+//   write_params("params.out");
+// }
+
 void Simulation::init(const string& filename) {
   cerr << "# Simulation::init()\n";//FLOW
 
-  auto maps = io::read_pairs(filename);
-  map<string,string> p_global=maps[0], p_elast=maps[1], p_indenter=maps[2], p_inter=maps[3];
+  auto toml = io::read_toml(filename);
 
-  for (const auto& [key, value] : p_global) {
-    cout << key << " " << value << endl;//DEBUG
+  for (const auto& [key, value] : toml) {
+    //cout << key << " " << value << endl;//DEBUG
     if (key == "Rmax") Rmax = stod(value);
     else if (key == "dTime") dTime = stod(value);
     else if (key == "nTime") nTime = stoi(value);
     else if (key == "nBin") nBin = stoi(value);
     else if (key == "grid") grid = stoi(value);
     else if (key == "frameInterval") frameInterval = stoi(value);
-    else cout << "# unknown elastic parameter: " << key << endl;//DEBUG
+    //else cout << "# unknown global parameter: " << key << endl;//DEBUG
   }
   area = M_PI*Rmax*Rmax;
 
   bin_edge = bins(nBin, Rmax, grid);
   bin_center = arithmetic_centers(bin_edge);
 
-  elastic = ElasticBody(bin_edge, bin_center, p_elast);
-  indenter = Indenter(bin_edge, bin_center, p_indenter);
-  interaction = Interaction(elastic, indenter, p_inter);
+  elastic = ElasticBody(bin_edge, bin_center, toml);
+  indenter = Indenter(bin_edge, bin_center, toml);
+  interaction = Interaction(elastic, indenter, toml);
 
   write_params("params.out");
 }
@@ -56,13 +83,12 @@ void Simulation::write_params(const string& filename) {
   ofstream output(filename);
   if (!output.is_open()) return;
 
-  output << "Global:\n";
-  output << "  nBin = " << nBin << "\n";
-  output << "  Rmax = " << Rmax << "\n";
-  output << "  grid = " << GRID[grid] << "\n";
-  output << "  nTime = " << nTime << "\n";
-  output << "  dTime = " << dTime << "\n";
-  output << "  frameInterval = " << frameInterval << "\n";
+  output << "nBin = " << nBin << "\n";
+  output << "Rmax = " << Rmax << "\n";
+  output << "grid = " << GRID[grid] << "\n";
+  output << "nTime = " << nTime << "\n";
+  output << "dTime = " << dTime << "\n";
+  output << "frameInterval = " << frameInterval << "\n";
   output << "\n";
   output.close();
 
@@ -98,7 +124,7 @@ void Simulation::update_bins() {
 
 int main() {
   Simulation sim;
-  sim.init("params.in");
+  sim.init("params.toml");
   sim.run();
 }
 

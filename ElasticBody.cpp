@@ -45,25 +45,28 @@ ElasticBody::ElasticBody(vector<double>& edges, vector<double>& centers,
 
 
 
-void ElasticBody::init(vector<double>& edges, vector<double>& centers, map<string,string> elastic) {
+void ElasticBody::init(vector<double>& edges, vector<double>& centers, map<string,string> toml) {
   cerr << "# ElasticBody::init()\n";//FLOW
 
   initialized = 0;
 
-  for (const auto& [key, value] : elastic) {
-    cout << key << " " << value << endl;//DEBUG
-    if (key == "Estar") Estar = stod(value);
+  for (const auto& [key, value] : toml) {
+    //cout << key << " " << value << endl;//DEBUG
+    size_t idx = key.find(".");
+    if (idx != string::npos && key.substr(0,idx) != "ElasticBody") continue;//ADJUST for ID
+    string name = key.substr(idx+1);
+    if (name == "Estar") Estar = stod(value);
     // solver
-    else if (key == "damping") damping = stod(value);
-    else if (key == "massGFMD") massGFMD = stod(value);
+    else if (name == "damping") damping = stod(value);
+    else if (name == "massGFMD") massGFMD = stod(value);
     // viscoelasticity
-    else if (key == "nMaxwell") nMaxwell = stoi(value);
-    else if (key == "Estar_inf") Estar_inf = stod(value);
+    else if (name == "nMaxwell") nMaxwell = stoi(value);
+    else if (name == "Estar_inf") Estar_inf = stod(value);
     // force/displacement control
-    else if (key == "force") force = stod(value);
-    else if (key == "fConstraint") fConstraint = stoi(value);
-    else if (key == "zPos") zPos = stod(value);
-    else std::cout << "# unknown elastic parameter: " << key << std::endl;//DEBUG
+    else if (name == "force") force = stod(value);
+    else if (name == "fConstraint") fConstraint = stoi(value);
+    else if (name == "zPos") zPos = stod(value);
+    //else std::cout << "# unknown elastic parameter: " << name << std::endl;//DEBUG
   }
 
   nBin = centers.size();
@@ -78,7 +81,7 @@ void ElasticBody::init(vector<double>& edges, vector<double>& centers, map<strin
   
   init_fields_from_bins();
   
-  if (nMaxwell > 0) init_Maxwell(stod(elastic["dTime"]));
+  if (nMaxwell > 0) init_Maxwell(stod(toml["dTime"]));
   else Estar_inf = Estar;
 
   init_stiffness();
@@ -390,7 +393,7 @@ void ElasticBody::write_params(const string& filename) {
   ofstream output(filename, std::ios::app);
   if (!output.is_open()) return;
 
-  output << "ElasticBody:\n";
+  output << "[ElasticBody]\n";
   output << "  force = " << force << "\n";
   output << "  Estar = " << Estar << "\n";
   output << "  nMaxwell = " << nMaxwell << "\n";
@@ -414,155 +417,3 @@ void ElasticBody::write_config(uint32_t iTime) {
   io::write_vectors("config."+to_string(iTime)+".dat", 
       {&bin_center, &disp, &int_stress, &ext_stress}, "r\tdisp\tint_stress\text_stress");
 }
-
-
-
-
-// -------------------------------------------------------------------------- //
-
-
-
-void ElasticBody::init(uint32_t N, double Rmax, uint8_t kind) {
-  initialized = 0;
-  if (kind==UNIFORM) init_uniform_bins(N, Rmax);
-  else {
-    cerr << "non-uniform grids not implemented yet.\n";
-    exit(1);
-  }
-  initialized += 1;
-  init_stiffness();
-}
-
-ElasticBody::ElasticBody(uint32_t N, double Rmax, uint8_t kind) : ID(0) {
-  init(N, Rmax, kind);
-}
-
-ElasticBody::ElasticBody(map<string,string> global, map<string,string> elastic) : ID(0) {
-  uint32_t nBin;
-  double Rmax;
-  uint8_t grid;
-  for (const auto& [key, value] : global) {
-    cout << key << " " << value << endl;//DEBUG
-    if (key == "Rmax") Rmax = stod(value);
-    else if (key == "nBin") nBin = stoi(value);
-    else if (key == "grid") grid = stoi(value);
-    else std::cout << "# unknown global parameter: " << key << std::endl;//DEBUG
-  }
-
-  init(nBin, Rmax, grid);
-  init(bin_edge, bin_center, elastic);
-}
-
-void ElasticBody::init_uniform_bins(uint32_t N, double Rmax) {
-/* 
-  discretizes radial coordinate into <N> equidistant points from 0 to <Rmax>. 
-*/
-
-  nBin = N;
-  bin_edge.resize(nBin+1);
-  area = M_PI*Rmax*Rmax;
-
-  double dr = Rmax/nBin;
-  for (int iEdge = 0; iEdge <= nBin; ++iEdge) 
-    bin_edge[iEdge] = iEdge*dr;
-  
-  init_fields_from_bins();
-};
-
-
-double s_fit(double x) {
-  return 1./(pow(x,2)-pow(abs(x),3)/M_PI);
-};
-
-void ElasticBody::fit_stiffness() {
-/* 
-  stiffness represents distribution of stress per surface displacement when 
-  only a single circle of width <bin_width> at r=<bin_center> is displaced.
-  This is an old version of init_stiffness, where eqs were fitted to GFMD data.
-*/
-  cerr << "# ElasticBody::fit_stiffness()\n";//FLOW
-  
-  double max_stiff = -1e256;
-  for (int uBin = 0; uBin < nBin; ++uBin) {
-
-    double bin_width = bin_area[uBin]/(2*M_PI*bin_center[uBin]);
-    double prefac = -Estar*bin_width/(2*M_PI*bin_center[uBin]*bin_center[uBin]);
-
-    double Fout_per_u = 0; // total force acting outside the displaced circle
-    for (int sBin = 0; sBin < nBin; ++sBin) {
-      if (uBin==sBin) continue;
-
-      double x = bin_center[sBin]/bin_center[uBin];
-      
-      /*// OPTION: separate treatment for displacement at the center
-      //if (uBin==0) stiffness_array[sBin][uBin] = M_PI*prefac/(pow(x-1., 3)/M_PI);
-      if (uBin==0) stiffness_array[sBin][uBin] = 2.4*prefac/(pow(x-1., 3)/M_PI);//works surprisingly well*/
-      
-      // OPTION: combination of the two below
-      if (x>1) stiffness_array[sBin][uBin] = prefac/(pow(x-1., 2) + pow(x-1., 3)/M_PI);
-      //else stiffness_array[sBin][uBin] = prefac*(s_fit(x-1)+s_fit(x+1) + 0.2);
-      //else stiffness_array[sBin][uBin] = prefac*(pow(x-1., -2) + pow(x+1., -2));//simple without constant
-      else stiffness_array[sBin][uBin] = prefac*(pow(x-1., -2) + 3.0);//works surprisingly well*/
-
-      /*// OPTION: x**-2 only
-      if (x>1) stiffness_array[sBin][uBin] = prefac*pow(x-1., -2);
-      else stiffness_array[sBin][uBin] = prefac*(pow(x-1., -2) + pow(x+1., -2) + M_PI/2.);//*/
-      
-      /*// OPTION: x**-2 to x**-3 cross-over
-      if (x>1) stiffness_array[sBin][uBin] = prefac/(pow(x-1., 2) + pow(x-1., 3)/M_PI);
-      else stiffness_array[sBin][uBin] = prefac*(1./(pow(x-1., 2) + pow(x+1., 2)) + 2*M_PI/5.5);//*/
-      
-      Fout_per_u += stiffness_array[sBin][uBin]*bin_area[uBin];
-    }
-
-    // force inside the circle must balance out the force outside of it
-    //stiffness_array[uBin][uBin] = -Fout_per_u/bin_area[uBin];
-  }
-
-  // // find constant term so that two sum rules can be fulfilled at the same time
-  // for (int iBin = 0; iBin < nBin; ++iBin) {
-  //   double norm = 0, offset = 0;
-  //   for (int jBin = 0; jBin < nBin; ++jBin) {
-  //     if (iBin==jBin) continue;
-  //     double ratio = bin_area[jBin]/bin_area[iBin];
-  //     offset += ratio*stiffness_array[jBin][iBin];
-  //     offset -= stiffness_array[iBin][jBin];
-  //     if (jBin>iBin) norm ++;
-  //     else norm -= ratio;
-  //   }
-  //   double c_stiff = offset/norm;
-  //   cout << c_stiff << "\n";//DEBUG
-  // }
-
-  // center of mass displacement must not result in any stress
-  for (int sBin = 0; sBin < nBin; ++sBin) {
-    double stress_per_u = 0;
-    for (int uBin = 0; uBin < nBin; ++uBin) {
-      if (uBin==sBin) continue;
-      stress_per_u -= stiffness_array[sBin][uBin];
-    }
-    stiffness_array[sBin][sBin] = stress_per_u;
-    //stiffness_array[sBin][sBin] = 1.00*stress_per_u - 0.00*stiffness_array[sBin][sBin];
-    if (stiffness_array[sBin][sBin] > max_stiff) max_stiff = stiffness_array[sBin][sBin];
-  }
-  max_stiff *= Estar/Estar_inf;
-  //cout << "max stiffness: " << max_stiff << "\n";//DEBUG*/
-};
-
-void ElasticBody::read_stiffness(const string& filename) {
-  cerr << "# ElasticBody::read_stiffness()\n";//FLOW
-  ifstream input(filename);
-  if (!input.is_open()) {
-    cerr << filename+" not found.\n";
-    exit(1);
-  }
-  cerr << "# reading "+filename+"\n";
-  string skip_string; double skip_value;
-  for (int sBin = 0; sBin < nBin; ++sBin) {
-    if (input.peek() == '#') getline(input, skip_string);
-    //input >> skip_value; // radius
-    for (int uBin = 0; uBin < nBin; ++uBin) input >> stiffness_array[sBin][uBin];
-    getline(input, skip_string);
-  }
-  input.close();
-};

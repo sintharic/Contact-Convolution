@@ -94,11 +94,16 @@ struct potparams {
 };
 
 namespace io {
-  vector< map<string,string> > read_pairs(const string&);
+  map<string,string> read_toml(const string&);
+  void write_toml(const string&, map<string,string>);
+  
   template <typename T> vector<T> read_column(const string& filename, uint32_t col);
   double column_increment(const string&, uint32_t);
+  
   void write_vectors(const string& filename, vector< vector<double>* > arrays, const string& header);
   void write_array(const string& filename, vector< vector<double> >& array, const string& header);
+  
+  vector< map<string,string> > read_pairs(const string&);
 }
 
 const geometry HERTZ;

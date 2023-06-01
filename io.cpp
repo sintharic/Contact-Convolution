@@ -164,3 +164,75 @@ vector< map<string,string> > io::read_pairs(const string& filename) {
 
   return {global, elastic, indenter, inter};
 }
+
+
+
+map<string,string> io::read_toml(const string& filename) {
+  map<string, string> result;
+  ifstream input(filename); 
+  
+  if (!input.is_open()) terminate("io::read_toml() could not open "+filename+".");
+  
+  string line; 
+  string group = "";
+  while (getline(input, line)) {
+    // erase leading and trailing whitespaces
+    line.erase(remove_if(line.begin(), line.end(), ::isspace), line.end());
+    
+    // ignore empty lines and comments
+    if(line[0] == COMMENT || line.empty()) continue;
+
+    // identify groups in the toml file
+    if (line[0] == '[') {
+      size_t idx = line.find("]");
+      group = line.substr(1, idx-1) + ".";
+      continue;
+    }
+
+    // find {name,value} pairs separated by delimiter
+    size_t delim = line.find(DELIMITER);
+    string name = group + line.substr(0, delim); 
+    string value = line.substr(delim + 1); 
+    for (const auto& [key, subs] : SUBS) {
+      if (key == value) value = subs;
+    }
+    result[name] = value;
+  }
+  input.close();
+
+  return result;
+}
+
+
+
+void io::write_toml(const string& filename, map<string,string> toml) {
+  map<string, string> result;
+  ofstream output(filename); 
+  
+  if (!output.is_open()) terminate("io::write_toml() could not open "+filename+".");
+
+  // first write the unstructured parameters
+  for (auto& [key,value] : toml) {
+    if (key.rfind('.') != string::npos) continue;
+    output << key << " = " << value << "\n";
+  }
+
+  // then the structured ones
+  string current_group = "";
+  for (auto& [key,value] : toml) {
+    string name = key;
+
+    // determine group structure
+    size_t idx = key.rfind('.');
+    if (idx != string::npos) {
+      string group = key.substr(0,idx);
+      if (current_group != group) {
+        current_group = group;
+        output << "\n[" << group << "]\n";
+      }
+      name = key.substr(idx+1);
+    }
+    else continue;
+    output << "  " << name << " = " << value << "\n";
+  }
+}

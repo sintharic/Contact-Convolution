@@ -20,7 +20,18 @@ Interaction::Interaction(ElasticBody& elast, Indenter& ind, potparams p) : param
   init(elast, ind);
 }
 
-Interaction::Interaction(ElasticBody& elast, Indenter& ind, map<string,string> p) : params(p) {
+Interaction::Interaction(ElasticBody& elast, Indenter& ind, map<string,string> toml) {
+  for (const auto& [key, value] : toml) {
+    //cout << key << " " << value << endl;//DEBUG
+    size_t idx = key.find(".");
+    if (idx != string::npos && key.substr(0,idx) != "Interaction") continue;//ADJUST for ID
+    string name = key.substr(idx+1);
+    if (name == "curvature") params.curvature = stod(value);
+    else if (name == "surfEnerg") params.surfEnerg = stod(value);
+    else if (name == "range") params.range = stod(value);
+    else if (name == "potCurveRel") params.potCurveRel = stod(value);
+    //else std::cout << "# unknown potential parameter: " << name << std::endl;//DEBUG
+  }
   init(elast, ind);
 }
 
@@ -39,7 +50,7 @@ void Interaction::write_params(const string& filename) {
   ofstream output(filename, std::ios::app);
   if (!output.is_open()) return;
 
-  output << "Interaction:\n";
+  output << "[Interaction]\n";
   output << "  surfEnerg = " << params.surfEnerg << "\n";
   if (params.potCurveRel > 0) {
     output << "  potCurveRel = " << params.potCurveRel << "\n";

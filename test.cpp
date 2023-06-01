@@ -135,6 +135,24 @@ void test_reader() {
   ElasticBody body(bin_edges, bin_centers, elast);
 }
 
+
+void test_toml() {
+  cerr << "# test_toml()\n";//FLOW
+  auto toml = io::read_toml("params.toml");
+  ofstream output("params_read.toml");
+  for (auto& [key,value] : toml) {
+    output << key << " = " << value << "\n";
+  }
+  output.close();
+
+  auto bin_edges = bins(200, 8., UNIFORM);
+  auto bin_centers = arithmetic_centers(bin_edges);
+  ElasticBody body(bin_edges, bin_centers, toml);
+
+  io::write_toml("params_written.toml", toml);
+}
+
+
 int main() {
   ElasticBody::test_ellip_int();
   Interaction::test_potentials();
@@ -143,5 +161,6 @@ int main() {
   test_stress();
   test_disp_propagation();
   test_reader();
+  test_toml();
   return 0;
 }

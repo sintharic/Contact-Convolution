@@ -44,10 +44,6 @@ public:
   ElasticBody(uint32_t i) : ID(i) {};
   ElasticBody(vector<double>&, vector<double>&, map<string,string>, uint32_t);
   void init(vector<double>&, vector<double>&, map<string,string>);
-  //old
-  ElasticBody(uint32_t, double, uint8_t);
-  ElasticBody(map<string,string>, map<string,string>);
-  void init(uint32_t, double, uint8_t);
   
   void init_Maxwell(double);
   void set_stress(double val);
